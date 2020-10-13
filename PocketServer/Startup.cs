@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -10,16 +8,57 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using System.Net.WebSockets;
 using System.Threading;
-using System.Net.Mime;
 using System.Text;
+using PocketServer.Extensions;
+using PocketServer.DataAccess;
+using Microsoft.EntityFrameworkCore;
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+using PocketServer.DataAccess.Core;
+using PocketServer.DataAccess.Services;
+using PocketServer.WebSockets;
 
 namespace PocketServer
 {
     public class Startup
     {
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+
+        public IConfiguration Configuration { get; }
+
         public void ConfigureServices(IServiceCollection services)
         {
+            // Add the DatabaseContext
+            services.AddDbContext<DatabaseContext>(
+                options => options.UseMySql(
+                    Configuration.GetConnectionString("AlertDatabase"),
+                    mySqlOptions => mySqlOptions.ServerVersion(new Version(15, 1, 0), ServerType.MariaDb)));
 
+            // Add the generic repository
+            services.AddScoped(typeof(IRepository<>), typeof(PocketRepository<>));
+
+            services.AddSingleton<WebSocketHandler>();
+
+            // Add the services
+            services.AddScoped<UserService>();
+            services.AddScoped<DeviceService>();
+            services.AddScoped<HeartbeatService>();
+
+            // Add controllers
+            services.AddControllers();
+
+            services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll", builder =>
+                {
+                    builder
+                        .AllowAnyOrigin()
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                });
+            });
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -30,42 +69,13 @@ namespace PocketServer
             }
 
             app.UseRouting();
-
-
-            // The configured values are the default values.
-            app.UseWebSockets(new WebSocketOptions()
+            app.UseCors("AllowAll");
+            app.AddWebSockets();
+            app.UseEndpoints(endpoints =>
             {
-                KeepAliveInterval = TimeSpan.FromSeconds(120),
-                ReceiveBufferSize = 4 * 1024
+                endpoints.MapControllers();
             });
-
-            app.Use(async (context, next) =>
-            {
-                Console.WriteLine("Request!");
-
-                if (context.WebSockets.IsWebSocketRequest)
-                {
-                    var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                    await Echo(context, webSocket);
-                }
-            });
-
         }
 
-        private async Task Echo(HttpContext context, WebSocket webSocket)
-        {
-            var buffer = new byte[1024 * 4];
-            var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
-            while (!result.CloseStatus.HasValue)
-            {
-                Console.WriteLine("Received a message: " + Encoding.UTF8.GetString(buffer, 0, buffer.Length));
-                await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
-
-                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-            }
-
-            await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
-        }
     }
 }
