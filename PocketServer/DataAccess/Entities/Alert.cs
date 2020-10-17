@@ -15,7 +15,12 @@ namespace PocketServer.DataAccess.Entities
         public double LocationLong { get; set; }
         public double LocationLat { get; set; }
 
-        public Device Device { get; set; }
-        public IList<AlertResponse> AlertResponses {get; set;}
+        public virtual Device Device { get; set; }
+        public virtual IList<AlertResponse> AlertResponses {get; set;}
+
+        public Alert()
+        {
+            Timestamp = DateTime.UtcNow;
+        }
     }
 }

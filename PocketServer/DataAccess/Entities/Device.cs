@@ -14,10 +14,11 @@ namespace PocketServer.DataAccess.Entities
         public string OwnerAddress { get; set; }
         public string OwnerZipCode { get; set; }
         public string OwnerCity { get; set; }
+        public string DateOfBirth { get; set; }
 
-        public IList<Subscription> Subscriptions { get; set; }
-        public IList<Alert> Alerts { get; set; }
-        public IList<Heartbeat> Heartbeats { get; set; }
+        public virtual IList<Subscription> Subscriptions { get; set; }
+        public virtual IList<Alert> Alerts { get; set; }
+        public virtual IList<Heartbeat> Heartbeats { get; set; }
 
         public Device()
         {

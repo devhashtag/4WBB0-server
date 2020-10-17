@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using PocketServer.DataAccess.Entities;
 using PocketServer.DataAccess.Services;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,78 +16,60 @@ namespace PocketServer.WebSockets
     {
         private readonly IHostApplicationLifetime _applicationLifetime;
         private readonly ConcurrentDictionary<string, SocketWrapper> _webSockets = new ConcurrentDictionary<string, SocketWrapper>();
-        private readonly UserService _userService;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        public WebSocketHandler(IHostApplicationLifetime applicationLifetime, UserService userService)
+        public WebSocketHandler(IHostApplicationLifetime applicationLifetime, IServiceScopeFactory scopeFactory)
         {
             _applicationLifetime = applicationLifetime;
-            _userService = userService;
+            _scopeFactory = scopeFactory;
         }
 
-        public async Task Add(WebSocket webSocket)
+        public void Add(WebSocket webSocket, TaskCompletionSource<object> taskCompletionSource)
         {
-            var socket = new SocketWrapper(webSocket, _applicationLifetime);
+            var socket = new SocketWrapper(webSocket, _applicationLifetime, _scopeFactory);
 
-            var userId = await GetUserId(socket);
-
-            if (userId == null || _webSockets.ContainsKey(userId))
+            Thread thread = new Thread(async () =>
             {
-                await socket.HandleError("A user with this ID is already connected");
-                return;
-            }
+                try
+                {
+                    await HandleSocket(socket);
+                } catch (Exception ex)
+                {
+                    // Probably a closed connection
+                    Console.WriteLine("Exception: " + ex.ToString());
+                }
 
-            _webSockets.GetOrAdd(userId, socket);
-
-            Thread thread = new Thread(async () => await HandleSocket(userId));
+                taskCompletionSource.SetResult(0);
+            });
             thread.Start();
         }
 
-        private async Task<string> GetUserId(SocketWrapper socket)
+        private async Task HandleSocket(SocketWrapper socket)
         {
-            // We wait on a message that contains either an Id request, or an Id
-            var message = await socket.ReceiveMessage();
-
-            if (! socket.ValidateMessage(message))
-            {
-                return null;
-            }
-
-            switch (message.Command)
-            {
-                case SocketWrapper.REQUEST_ID:
-                    var user = new User();
-
-                    await _userService.AddAsync(user);
-                    await socket.SendMessage(new SocketWrapper.Message()
-                    {
-                        Command = SocketWrapper.ID,
-                        Argument = user.Id
-                    });
-                    break;
-                case SocketWrapper.ID:
-                    if (await _userService.ExistsAsync(message.Argument)) return message.Argument;
-
-                    await socket.HandleError("Provided ID does not exist in the database. Please request a new ID");
-                    break;
-                default:
-                    await socket.HandleError("Unexpected command: " + message.Command);
-                    break;
-            }
-
-            return null;
-        }
-
-        private async Task HandleSocket(string userId)
-        {
-            var socket = _webSockets[userId];
-
+            Console.WriteLine("In handle socket");
             while (! socket.IsClosed)
             {
+                Console.WriteLine("socket is not closed");
                 // Receive and handle commands
+                var message = await socket.ReceiveMessage();
+
+                Console.WriteLine("Received message:\n" + message.ToString());
+
+                await socket.HandleMessage(message);
+
+                Console.WriteLine("Message handled");
+
+                // Check if user is identifier
+                if (socket.UserId != null)
+                {
+                    _webSockets.GetOrAdd(socket.UserId, socket);
+                }
+                
+                // Prevent 100% CPU-usage
                 Thread.Sleep(50);
             }
 
-            _webSockets.Remove(userId, out socket);
+            _webSockets.Remove(socket.UserId, out socket);
         }
     }
 }

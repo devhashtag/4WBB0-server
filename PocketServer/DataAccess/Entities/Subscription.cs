@@ -11,7 +11,7 @@ namespace PocketServer.DataAccess.Entities
         public string UserId { get; set; }
         public string DeviceId { get; set; }
 
-        public User User { get; set; }
-        public Device Device { get; set; }
+        public virtual User User { get; set; }
+        public virtual Device Device { get; set; }
     }
 }

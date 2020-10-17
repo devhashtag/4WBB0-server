@@ -12,7 +12,13 @@ namespace PocketServer.DataAccess.Entities
         public string DeviceId { get; set; }
         public double Longitude { get; set; }
         public double Lattitue { get; set; }
+        public DateTime Timestamp { get; set; }
 
-        public Device Device { get; set; }
+        public virtual Device Device { get; set; }
+
+        public Heartbeat()
+        {
+            Timestamp = DateTime.UtcNow;
+        }
     }
 }

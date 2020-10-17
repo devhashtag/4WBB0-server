@@ -14,7 +14,7 @@ namespace PocketServer.DataAccess.Entities
         public DateTime Received { get; set; }
         public DateTime Seen { get; set; }
 
-        public User User { get; set; }
-        public Alert Alert { get; set; }
+        public virtual User User { get; set; }
+        public virtual Alert Alert { get; set; }
     }
 }

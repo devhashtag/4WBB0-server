@@ -34,7 +34,8 @@ namespace PocketServer
             services.AddDbContext<DatabaseContext>(
                 options => options.UseMySql(
                     Configuration.GetConnectionString("AlertDatabase"),
-                    mySqlOptions => mySqlOptions.ServerVersion(new Version(15, 1, 0), ServerType.MariaDb)));
+                    mySqlOptions => mySqlOptions.ServerVersion(new Version(15, 1, 0), ServerType.MariaDb))
+                .UseLazyLoadingProxies());
 
             // Add the generic repository
             services.AddScoped(typeof(IRepository<>), typeof(PocketRepository<>));
@@ -45,6 +46,7 @@ namespace PocketServer
             services.AddScoped<UserService>();
             services.AddScoped<DeviceService>();
             services.AddScoped<HeartbeatService>();
+            services.AddScoped<AlertService>();
 
             // Add controllers
             services.AddControllers();
